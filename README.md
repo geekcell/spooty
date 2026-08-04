@@ -1,9 +1,6 @@
-[![npm version](https://img.shields.io/docker/pulls/raiper34/spooty)](https://hub.docker.com/r/raiper34/spooty)
-[![npm version](https://img.shields.io/docker/image-size/raiper34/spooty)](https://hub.docker.com/r/raiper34/spooty)
-![Docker Image Version](https://img.shields.io/docker/v/raiper34/spooty)
-[![npm version](https://img.shields.io/docker/stars/raiper34/spooty)](https://hub.docker.com/r/raiper34/spooty)
-[![GitHub License](https://img.shields.io/github/license/raiper34/spooty)](https://github.com/Raiper34/spooty)
-[![GitHub Repo stars](https://img.shields.io/github/stars/raiper34/spooty)](https://github.com/Raiper34/spooty)
+[![GitHub License](https://img.shields.io/github/license/dougchansan/spooty)](https://github.com/dougchansan/spooty/blob/main/LICENSE.md)
+[![GitHub Repo stars](https://img.shields.io/github/stars/dougchansan/spooty)](https://github.com/dougchansan/spooty)
+[![GitHub last commit](https://img.shields.io/github/last-commit/dougchansan/spooty)](https://github.com/dougchansan/spooty/commits/main)
 
 ![spooty logo](assets/logo.svg)
 # Spooty - selfhosted Spotify downloader
@@ -18,7 +15,6 @@ The project is based on NestJS and Angular.
 
 ### Content
 - [🚀 Installation](#-installation)
-  - [Spotify App Configuration](#spotify-app-configuration)
   - [Docker](#docker)
     - [Docker command](#docker-command)
     - [Docker compose](#docker-compose)
@@ -31,47 +27,46 @@ The project is based on NestJS and Angular.
 ## 🚀 Installation
 Recommended and the easiest way how to start to use of Spooty is using docker.
 
-### Spotify App Configuration
-
-To fully use Spooty, you need to create an application in the Spotify Developer Dashboard:
-
-1. Go to [Spotify Developer Dashboard](https://developer.spotify.com/dashboard)
-2. Sign in with your Spotify account
-3. Create a new application
-4. Note your `Client ID` and `Client Secret`
-5. Configure the redirect URI to `http://127.0.0.1:3000/api/callback` (or the corresponding URL of your instance)
-
-These credentials will be used by Spooty to access the Spotify API.
+> [!NOTE]
+> This fork does not require a Spotify Developer application. It reads playlist
+> metadata using an anonymous Spotify embed token, so there is no
+> `SPOTIFY_CLIENT_ID` or `SPOTIFY_CLIENT_SECRET` to configure.
 
 ### Docker
 
-Just run docker command or use docker compose configuration.
+This fork does not publish an image to Docker Hub, so build it locally first:
+
+```shell
+git clone https://github.com/dougchansan/spooty.git
+cd spooty
+docker build -t spooty .
+```
+
 For detailed configuration, see available [environment variables](#environment-variables).
 
 #### Docker command
 ```shell
 docker run -d -p 3000:3000 \
   -v /path/to/downloads:/spooty/backend/downloads \
-  -e SPOTIFY_CLIENT_ID=your_client_id \
-  -e SPOTIFY_CLIENT_SECRET=your_client_secret \
-  raiper34/spooty:latest
+  -v /path/to/cookies.txt:/spooty/cookies.txt:ro \
+  spooty
 ```
 
 #### Docker compose
 ```yaml
 services:
   spooty:
-    image: raiper34/spooty:latest
+    image: spooty
     container_name: spooty
     restart: unless-stopped
     ports:
       - "3000:3000"
     volumes:
       - /path/to/downloads:/spooty/backend/downloads
+      - /path/to/cookies.txt:/spooty/cookies.txt:ro
     environment:
-      - SPOTIFY_CLIENT_ID=your_client_id
-      - SPOTIFY_CLIENT_SECRET=your_client_secret
       # Configure other environment variables if needed
+      - DOWNLOAD_CONCURRENCY=2
 ```
 
 ### Build from source
@@ -88,11 +83,6 @@ Spooty can be also build from source files on your own.
 - install Node v20.20.0 using `nvm install` and use that node version `nvm use`
 - from project root install all dependencies using `npm install`
 - copy `.env.default` as `.env` in `src/backend` folder and modify desired environment properties (see [environment variables](#environment-variables))
-- add your Spotify application credentials to the `.env` file:
-  ```
-  SPOTIFY_CLIENT_ID=your_client_id
-  SPOTIFY_CLIENT_SECRET=your_client_secret
-  ```
 - build source files `npm run build`
     - built project will be stored in `dist` folder
 - start server `npm run start`
@@ -100,6 +90,13 @@ Spooty can be also build from source files on your own.
 ### Environment variables
 
 Some behaviour and settings of Spooty can be configured using environment variables and `.env` file.
+
+> [!IMPORTANT]
+> `DOWNLOAD_CONCURRENCY`, `DOWNLOAD_GAP_MS` and `SEARCH_CONCURRENCY` are the
+> exception: they are read at module-import time, before the `.env` file is
+> loaded, so putting them in `.env` has no effect. Pass them as real environment
+> variables (`docker run -e ...`, compose `environment:`, or `export`). All
+> other variables in this table work in `.env` as usual.
 
  Name                 | Default                                     | Description                                                                                                                                   |
 ----------------------|---------------------------------------------|-----------------------------------------------------------------------------------------------------------------------------------------------|
@@ -111,20 +108,37 @@ Some behaviour and settings of Spooty can be configured using environment variab
  PORT                 | 3000                                        | Port of Spooty server                                                                                                                         |
  REDIS_PORT           | 6379                                        | Port of Redis server                                                                                                                          |
  REDIS_HOST           | localhost                                   | Host of Redis server                                                                                                                          |
- RUN_REDIS            | false                                       | Whenever Redis server should be started from backend (recommended for Docker environment)                                                     |
- SPOTIFY_CLIENT_ID    | your_client_id                              | Client ID of your Spotify application (required)                                                                                              |
- SPOTIFY_CLIENT_SECRET| your_client_secret                          | Client Secret of your Spotify application (required)                                                                                          |
- YT_DOWNLOADS_PER_MINUTE | 3                                           | Set the maximum number of YouTube downloads started per minute                                                                                |
- YT_COOKIES           |                                             | Allows you to pass your YouTube cookies to bypass some download restrictions. See [below](#how-to-get-your-youtube-cookies) for instructions. |
+ REDIS_RUN            | false                                       | Whenever Redis server should be started from backend (recommended for Docker environment)                                                     |
+ DOWNLOAD_CONCURRENCY | 2                                           | How many downloads may run at once. Raising this makes YouTube rate limiting much more likely.                                                 |
+ DOWNLOAD_GAP_MS      | 3000                                        | Minimum milliseconds between the start of one download and the next. Together with the above this caps throughput at ~20 downloads/min.        |
+ SEARCH_CONCURRENCY   | 3                                           | How many YouTube searches may run at once.                                                                                                    |
 
-### How to get your YouTube cookies (using browser dev tools):
-1. Go to https://www.youtube.com and log in if needed.
-2. Open the browser developer tools (F12 or right click > Inspect).
-3. Go to the "Application" tab (in Chrome) or "Storage" (in Firefox).
-4. In the left menu, find "Cookies" and select https://www.youtube.com.
-5. Copy all the cookies (name=value) and join them with a semicolon and a space, like:
-   VISITOR_INFO1_LIVE=xxxx; YSC=xxxx; SID=xxxx; ...
-6. Paste this string into the YT_COOKIES environment variable (in your .env or Docker config).
+> [!WARNING]
+> YouTube rate-limits a session for up to an hour after roughly 100 rapid
+> downloads, and tracks that fail this way stay in an error state until they are
+> retried. The defaults above are deliberately conservative for that reason.
+> Raise them only if you are willing to trade stalled downloads for speed.
+
+### How to supply your YouTube cookies
+
+Some downloads are restricted unless the request is authenticated. Spooty passes
+a cookies file straight to `yt-dlp`, which expects **Netscape format** — not the
+`name=value; name=value` string used by older versions of these instructions.
+
+1. Install a "cookies.txt" browser extension that exports in Netscape format.
+2. Go to https://www.youtube.com and log in if needed.
+3. Export the cookies for that domain to a file named `cookies.txt`.
+4. Mount that file into the container at `/spooty/cookies.txt`, as shown in the
+   [Docker](#docker) examples above.
+
+> [!CAUTION]
+> This file contains live Google account session cookies, not just YouTube ones.
+> Anyone who obtains it can access your Google account without a password.
+> Store it outside your repository, never commit it, never paste its contents
+> into a chat, issue, or web form, and mount it read-only (`:ro`) so the
+> container cannot modify it. Prefer exporting from a throwaway Google account.
+> Bake it into an image only if you are certain that image will never be shared —
+> image layers preserve it even if a later layer deletes the file.
 
 # ⚖️ License
 [MIT](https://choosealicense.com/licenses/mit/)
