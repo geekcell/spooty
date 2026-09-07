@@ -9,8 +9,40 @@ export class SpotifyApiService {
   private readonly logger = new Logger(SpotifyApiService.name);
   private embedToken: string | null = null;
   private embedTokenExpiry: number = 0;
+  private apiToken: string | null = null;
+  private apiTokenExpiry = 0;
 
   constructor() {}
+
+  // Client-credentials token (SPOTIFY_CLIENT_ID/SECRET). The anonymous embed
+  // token is quota-limited (429) on /v1/albums; real app creds lift that so
+  // album year + disc/track numbers come back reliably. Falls back to the
+  // embed token when no creds are configured.
+  private async getApiToken(): Promise<string> {
+    const id = process.env.SPOTIFY_CLIENT_ID;
+    const secret = process.env.SPOTIFY_CLIENT_SECRET;
+    if (!id || !secret) {
+      return this.getEmbedToken('album');
+    }
+    if (this.apiToken && Date.now() < this.apiTokenExpiry) {
+      return this.apiToken;
+    }
+    const res = await fetch('https://accounts.spotify.com/api/token', {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/x-www-form-urlencoded',
+        Authorization: `Basic ${Buffer.from(`${id}:${secret}`).toString('base64')}`,
+      },
+      body: 'grant_type=client_credentials',
+    });
+    if (!res.ok) {
+      throw new Error(`Spotify token request failed: ${res.status}`);
+    }
+    const data = await res.json();
+    this.apiToken = data.access_token;
+    this.apiTokenExpiry = Date.now() + (data.expires_in - 60) * 1000;
+    return this.apiToken;
+  }
 
   private getPlaylistId(url: string): string {
     try {
@@ -72,7 +104,7 @@ export class SpotifyApiService {
   }> {
     this.logger.debug(`Getting album metadata for ${spotifyUrl}`);
     const albumId = this.getAlbumId(spotifyUrl);
-    const accessToken = await this.getEmbedToken('album', albumId);
+    const accessToken = await this.getApiToken();
 
     const response = await fetch(
       `https://api.spotify.com/v1/albums/${albumId}`,
@@ -148,7 +180,7 @@ export class SpotifyApiService {
     try {
       this.logger.debug(`Getting track metadata for ${spotifyUrl}`);
       const trackId = this.getTrackId(spotifyUrl);
-      const accessToken = await this.getEmbedToken('track', trackId);
+      const accessToken = await this.getApiToken();
 
       const response = await fetch(
         `https://api.spotify.com/v1/tracks/${trackId}`,
@@ -278,7 +310,7 @@ export class SpotifyApiService {
       // Phase 2: Use embed token for paginated API access
       let accessToken: string;
       try {
-        accessToken = await this.getEmbedToken('playlist', playlistId);
+        accessToken = await this.getApiToken();
       } catch (e) {
         this.logger.warn(
           `Failed to get embed token: ${e.message}, falling back to embed data`,
@@ -327,7 +359,7 @@ export class SpotifyApiService {
             this.embedToken = null;
             this.embedTokenExpiry = 0;
             try {
-              accessToken = await this.getEmbedToken('playlist', playlistId);
+              accessToken = await this.getApiToken();
             } catch (e) {
               this.logger.warn(`Failed to refresh embed token: ${e.message}`);
             }
@@ -341,7 +373,7 @@ export class SpotifyApiService {
             this.embedToken = null;
             this.embedTokenExpiry = 0;
             try {
-              accessToken = await this.getEmbedToken('playlist', playlistId);
+              accessToken = await this.getApiToken();
             } catch (e) {
               this.logger.warn(`Failed to refresh embed token: ${e.message}`);
               break;
