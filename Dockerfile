@@ -16,5 +16,7 @@ RUN rm -rf src package.json package-lock.json
 RUN apk add --no-cache ffmpeg
 RUN apk add --no-cache redis
 RUN apk add --no-cache python3 py3-pip
+# mutagen: yt-dlp --embed-metadata/--embed-thumbnail schreibt die Tags damit
+RUN apk add --no-cache py3-mutagen
 EXPOSE 3000
 CMD ["node", "backend/main.js"]
