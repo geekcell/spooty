@@ -30,7 +30,7 @@ export class TrackController {
     @Param('id') id: number,
   ): Promise<StreamableFile> {
     const track = await this.service.get(id);
-    const fileName = this.service.getTrackFileName(track);
+    const fileName = this.service.getTrackFileName(track, track.playlist);
     const readStream = createReadStream(
       this.service.getFolderName(track, track.playlist),
     );

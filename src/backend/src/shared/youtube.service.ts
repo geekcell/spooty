@@ -17,8 +17,15 @@ export class YoutubeService {
     this.logger.debug(`Searching ${artist} - ${name} on YouTube Music`);
     const query = `${artist} ${name}`.replace(/"/g, '').replace(/&/g, '');
     const encodedQuery = encodeURIComponent(query);
-    const ytDlpBin = require('ytdlp-nodejs').YtDlp.defaultOptions?.binaryPath
-      || require('path').resolve(require.resolve('ytdlp-nodejs'), '..', '..', 'bin', 'yt-dlp');
+    const ytDlpBin =
+      require('ytdlp-nodejs').YtDlp.defaultOptions?.binaryPath ||
+      require('path').resolve(
+        require.resolve('ytdlp-nodejs'),
+        '..',
+        '..',
+        'bin',
+        'yt-dlp',
+      );
 
     // Try YouTube Music first (studio recordings)
     const ytMusicCmd = `"${ytDlpBin}" "https://music.youtube.com/search?q=${encodedQuery}" --print webpage_url --playlist-items 1 --cookies /spooty/cookies.txt --no-warnings 2>/dev/null`;
@@ -61,29 +68,43 @@ export class YoutubeService {
       this.logger.error('youtubeUrl is null or undefined');
       throw Error('youtubeUrl is null or undefined');
     }
-    const ytDlpBin = require('ytdlp-nodejs').YtDlp.defaultOptions?.binaryPath
-      || require('path').resolve(require.resolve('ytdlp-nodejs'), '..', '..', 'bin', 'yt-dlp');
-    const format = this.configService.get<string>(EnvironmentEnum.FORMAT) || 'mp3';
+    const ytDlpBin =
+      require('ytdlp-nodejs').YtDlp.defaultOptions?.binaryPath ||
+      require('path').resolve(
+        require.resolve('ytdlp-nodejs'),
+        '..',
+        '..',
+        'bin',
+        'yt-dlp',
+      );
+    const format =
+      this.configService.get<string>(EnvironmentEnum.FORMAT) || 'mp3';
     const quality = this.configService.get<string>('QUALITY');
     // cookies.txt is an optional mount — yt-dlp aborts on a missing file,
     // so only pass it when it actually exists.
     const cookiesPath = '/spooty/cookies.txt';
     const args = [
-      '--js-runtime', 'node',
-      '-o', output,
+      '--js-runtime',
+      'node',
+      '-o',
+      output,
       ...(existsSync(cookiesPath) ? ['--cookies', cookiesPath] : []),
       '--extract-audio',
-      '--audio-format', format,
+      '--audio-format',
+      format,
       // Proper container tags (Vorbis comments for opus/flac, ID3 for mp3)
       // plus cover art — NodeID3 below only handles mp3.
       '--embed-metadata',
       '--embed-thumbnail',
       '--progress',
       '--newline',
-      '--progress-template', '%(progress._percent_str)s',
+      '--progress-template',
+      '%(progress._percent_str)s',
       '--no-warnings',
-      '--audio-quality', quality || '0',
-      '--', track.youtubeUrl,
+      '--audio-quality',
+      quality || '0',
+      '--',
+      track.youtubeUrl,
     ];
 
     await new Promise<void>((resolve, reject) => {
@@ -107,7 +128,9 @@ export class YoutubeService {
       proc.on('error', reject);
       proc.on('close', (code) => {
         if (code !== 0) {
-          reject(new Error(`yt-dlp exited with code ${code}: ${stderr.trim()}`));
+          reject(
+            new Error(`yt-dlp exited with code ${code}: ${stderr.trim()}`),
+          );
         } else {
           resolve();
         }

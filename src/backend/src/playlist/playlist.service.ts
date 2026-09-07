@@ -223,11 +223,15 @@ export class PlaylistService {
       }
       const multiDisc = (playlist.discs ?? 1) > 1;
       const lines = tracks.map((t) => {
-        const file = this.trackService.getTrackFileName({
-          artist: t.artist,
-          name: t.name,
-          trackNumber: t.trackNumber,
-        } as TrackEntity);
+        const file = this.trackService.getTrackFileName(
+          {
+            artist: t.artist,
+            name: t.name,
+            trackNumber: t.trackNumber,
+            discNumber: t.discNumber,
+          } as TrackEntity,
+          playlist,
+        );
         const prefix =
           multiDisc && t.discNumber
             ? `Disc ${this.utilsService.pad2(t.discNumber)}/`
@@ -275,9 +279,10 @@ export class PlaylistService {
   @Interval(3_600_000)
   async checkActivePlaylists(): Promise<void> {
     // Only check actual playlists (not individual tracks) that are subscribed
-    const activePlaylists = await this.findAll(
-      { active: true, isTrack: false },
-    );
+    const activePlaylists = await this.findAll({
+      active: true,
+      isTrack: false,
+    });
     for (const playlist of activePlaylists) {
       let tracks = [];
       try {

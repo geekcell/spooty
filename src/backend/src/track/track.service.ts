@@ -74,7 +74,9 @@ export class TrackService {
 
   async retry(id: number): Promise<void> {
     const track = await this.get(id);
-    await this.trackSearchQueue.add('', track, { jobId: `id-${id}-${Date.now()}` });
+    await this.trackSearchQueue.add('', track, {
+      jobId: `id-${id}-${Date.now()}`,
+    });
     await this.update(id, { ...track, status: TrackStatusEnum.New });
   }
 
@@ -114,11 +116,7 @@ export class TrackService {
     if (!(await this.get(track.id))) {
       return;
     }
-    if (
-      !track.name ||
-      !track.artist ||
-      !track.playlist
-    ) {
+    if (!track.name || !track.artist || !track.playlist) {
       this.logger.error(
         `Track or playlist field is null or undefined: name=${track.name}, artist=${track.artist}, playlist=${track.playlist ? 'ok' : 'null'}`,
       );
@@ -138,14 +136,18 @@ export class TrackService {
     let error: string;
     try {
       const folderName = this.getFolderName(track, track.playlist);
-      await this.youtubeService.downloadAndFormat(track, folderName, (progress) => {
-        if (progress && progress.percentage !== undefined) {
-          this.io.emit('trackProgress', {
-            id: track.id,
-            percent: Math.round(progress.percentage),
-          });
-        }
-      });
+      await this.youtubeService.downloadAndFormat(
+        track,
+        folderName,
+        (progress) => {
+          if (progress && progress.percentage !== undefined) {
+            this.io.emit('trackProgress', {
+              id: track.id,
+              percent: Math.round(progress.percentage),
+            });
+          }
+        },
+      );
       if (coverUrl) {
         await this.youtubeService.addImage(
           folderName,
@@ -160,13 +162,13 @@ export class TrackService {
       error = String(err);
     }
     // Auto-retry on rate limit errors
-    const isRateLimit = error && (
-      error.includes('429') ||
-      error.includes('Too Many Requests') ||
-      error.includes('rate') ||
-      error.includes('Sign in to confirm') ||
-      error.includes('HTTP Error 403')
-    );
+    const isRateLimit =
+      error &&
+      (error.includes('429') ||
+        error.includes('Too Many Requests') ||
+        error.includes('rate') ||
+        error.includes('Sign in to confirm') ||
+        error.includes('HTTP Error 403'));
     if (isRateLimit && retryCount < MAX_RETRIES) {
       const backoff = (retryCount + 1) * 30000; // 30s, 60s, 90s
       this.logger.warn(
@@ -188,13 +190,19 @@ export class TrackService {
     await this.update(track.id, updatedTrack);
   }
 
-  getTrackFileName(track: TrackEntity): string {
+  getTrackFileName(track: TrackEntity, playlist?: PlaylistEntity): string {
     const format = this.configService.get<string>(EnvironmentEnum.FORMAT);
     const safeName = (track.name || 'unknown_track').replace('/', '');
-    // Album tracks follow the Qobuz layout "NN - Track Title.<fmt>";
-    // playlist and single tracks keep "Artist - Title.<fmt>".
+    // Album tracks follow the Qobuz layout: "NN - Track Title.<fmt>", on
+    // multi-disc sets "DNN - ..." (disc digit + 2-digit track, e.g. 210).
+    // Playlist and single tracks keep "Artist - Title.<fmt>".
     if (track.trackNumber) {
-      return `${this.utilsService.pad2(track.trackNumber)} - ${this.utilsService.stripFileIllegalChars(safeName)}.${format}`;
+      const multiDisc = (playlist?.discs ?? 1) > 1;
+      const num =
+        multiDisc && track.discNumber
+          ? `${track.discNumber}${this.utilsService.pad2(track.trackNumber)}`
+          : this.utilsService.pad2(track.trackNumber);
+      return `${num} - ${this.utilsService.stripFileIllegalChars(safeName)}.${format}`;
     }
     const safeArtist = track.artist || 'unknown_artist';
     const fileName = `${safeArtist} - ${safeName}`;
@@ -209,7 +217,7 @@ export class TrackService {
         this.getTrackFileName(track),
       );
     }
-    
+
     // Multi-disc albums nest one "Disc NN" level (Qobuz layout).
     const parts: string[] = [];
     if ((playlist?.discs ?? 1) > 1 && track.discNumber) {
@@ -218,7 +226,7 @@ export class TrackService {
     return resolve(
       this.utilsService.getPlaylistFolderPath(playlist ?? {}),
       ...parts,
-      this.getTrackFileName(track),
+      this.getTrackFileName(track, playlist),
     );
   }
 

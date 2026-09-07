@@ -221,8 +221,7 @@ export class SpotifyApiService {
       throw new Error('No access token in embed page data');
     }
     this.embedToken = session.accessToken;
-    this.embedTokenExpiry =
-      session.accessTokenExpirationTimestampMs - 60000;
+    this.embedTokenExpiry = session.accessTokenExpirationTimestampMs - 60000;
     this.logger.debug('Successfully obtained embed token');
     return this.embedToken;
   }
@@ -318,7 +317,9 @@ export class SpotifyApiService {
           if (response.status === 429 && retryCount < MAX_RETRIES) {
             retryCount++;
             const retryAfter = response.headers.get('retry-after');
-            const waitSecs = retryAfter ? parseInt(retryAfter, 10) : 30 * retryCount;
+            const waitSecs = retryAfter
+              ? parseInt(retryAfter, 10)
+              : 30 * retryCount;
             this.logger.warn(
               `Rate limited (429), waiting ${waitSecs}s before retry ${retryCount}/${MAX_RETRIES}...`,
             );
