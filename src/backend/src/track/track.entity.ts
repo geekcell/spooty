@@ -36,6 +36,17 @@ export class TrackEntity {
   @Column({ nullable: true })
   coverUrl?: string; // Track-specific album art (overrides playlist coverUrl)
 
+  // Album context (Qobuz-style layout): position drives "NN - Title" file
+  // names, discNumber the "Disc NN" folder, durationMs the LrcLib lookup.
+  @Column({ nullable: true })
+  trackNumber?: number;
+
+  @Column({ nullable: true })
+  discNumber?: number;
+
+  @Column({ nullable: true })
+  durationMs?: number;
+
   @Column({ default: Date.now() })
   createdAt?: number;
 

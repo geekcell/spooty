@@ -39,6 +39,7 @@ export class SpotifyService {
     image: string;
     artist?: string;
     year?: string;
+    discs?: number;
   }> {
     this.logger.debug(`Get playlist ${spotifyUrl} on Spotify`);
 

@@ -4,6 +4,7 @@ import { Repository } from 'typeorm';
 import { TrackEntity, TrackStatusEnum } from './track.entity';
 import { PlaylistEntity } from '../playlist/playlist.entity';
 import { ConfigService } from '@nestjs/config';
+import { writeFileSync } from 'fs';
 import { resolve } from 'path';
 import { WebSocketGateway, WebSocketServer } from '@nestjs/websockets';
 import { Server } from 'socket.io';
@@ -153,6 +154,7 @@ export class TrackService {
           track.artist,
         );
       }
+      await this.writeLyrics(track, folderName);
     } catch (err) {
       this.logger.error(err);
       error = String(err);
@@ -187,10 +189,16 @@ export class TrackService {
   }
 
   getTrackFileName(track: TrackEntity): string {
-    const safeArtist = track.artist || 'unknown_artist';
+    const format = this.configService.get<string>(EnvironmentEnum.FORMAT);
     const safeName = (track.name || 'unknown_track').replace('/', '');
+    // Album tracks follow the Qobuz layout "NN - Track Title.<fmt>";
+    // playlist and single tracks keep "Artist - Title.<fmt>".
+    if (track.trackNumber) {
+      return `${this.utilsService.pad2(track.trackNumber)} - ${this.utilsService.stripFileIllegalChars(safeName)}.${format}`;
+    }
+    const safeArtist = track.artist || 'unknown_artist';
     const fileName = `${safeArtist} - ${safeName}`;
-    return `${this.utilsService.stripFileIllegalChars(fileName)}.${this.configService.get<string>(EnvironmentEnum.FORMAT)}`;
+    return `${this.utilsService.stripFileIllegalChars(fileName)}.${format}`;
   }
 
   getFolderName(track: TrackEntity, playlist: PlaylistEntity): string {
@@ -202,9 +210,42 @@ export class TrackService {
       );
     }
     
+    // Multi-disc albums nest one "Disc NN" level (Qobuz layout).
+    const parts: string[] = [];
+    if ((playlist?.discs ?? 1) > 1 && track.discNumber) {
+      parts.push(`Disc ${this.utilsService.pad2(track.discNumber)}`);
+    }
     return resolve(
       this.utilsService.getPlaylistFolderPath(playlist ?? {}),
+      ...parts,
       this.getTrackFileName(track),
     );
+  }
+
+  // Qobuz layout ships synced lyrics as "<track>.lrc" — fetched from LrcLib
+  // (free, no auth). Missing lyrics are expected and non-fatal.
+  async writeLyrics(track: TrackEntity, filePath: string): Promise<void> {
+    try {
+      const params = new URLSearchParams({
+        artist_name: track.artist,
+        track_name: track.name,
+      });
+      if (track.playlist?.name) {
+        params.set('album_name', track.playlist.name);
+      }
+      if (track.durationMs) {
+        params.set('duration', String(Math.round(track.durationMs / 1000)));
+      }
+      const res = await fetch(`https://lrclib.net/api/get?${params}`);
+      if (!res.ok) return;
+      const data = await res.json();
+      const lyrics = data.syncedLyrics || data.plainLyrics;
+      if (!lyrics) return;
+      writeFileSync(filePath.replace(/\.[^.]+$/, '.lrc'), lyrics);
+    } catch (err) {
+      this.logger.debug(
+        `No lyrics for ${track.artist} - ${track.name}: ${err}`,
+      );
+    }
   }
 }

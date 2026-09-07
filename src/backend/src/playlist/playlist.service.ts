@@ -6,8 +6,9 @@ import { TrackService } from '../track/track.service';
 import { WebSocketGateway, WebSocketServer } from '@nestjs/websockets';
 import { Server } from 'socket.io';
 import * as fs from 'fs';
+import { resolve } from 'path';
 import { Interval } from '@nestjs/schedule';
-import { TrackStatusEnum } from '../track/track.entity';
+import { TrackEntity, TrackStatusEnum } from '../track/track.entity';
 import { UtilsService } from '../shared/utils.service';
 import { SpotifyService } from '../shared/spotify.service';
 
@@ -107,6 +108,7 @@ export class PlaylistService {
       image: any;
       artist?: string;
       year?: string;
+      discs?: number;
     };
     let playlist2Save: PlaylistEntity;
     try {
@@ -121,6 +123,7 @@ export class PlaylistService {
         coverUrl: detail.image,
         artist: detail.artist,
         year: detail.year,
+        discs: detail.discs,
       };
       this.createPlaylistFolderStructure(playlist2Save);
     } catch (err) {
@@ -162,6 +165,9 @@ export class PlaylistService {
               name: track.name,
               spotifyUrl: track.previewUrl || null,
               coverUrl: track.coverUrl || savedPlaylist.coverUrl, // Use track's album art, fallback to playlist cover
+              trackNumber: track.trackNumber,
+              discNumber: track.discNumber,
+              durationMs: track.durationMs,
             },
             savedPlaylist,
           );
@@ -187,8 +193,51 @@ export class PlaylistService {
         `Finished processing playlist ${savedPlaylist.name}: ` +
           `${processedCount} tracks processed, ${skippedCount} skipped, ${errorCount} errors`,
       );
+
+      if (savedPlaylist.artist && savedPlaylist.year) {
+        await this.writeAlbumExtras(savedPlaylist, detail.tracks);
+      }
     } else {
       this.logger.warn(`No tracks found for playlist ${savedPlaylist.name}`);
+    }
+  }
+
+  // Qobuz layout ships "cover.jpg" and "<Album Title>.m3u" next to the
+  // tracks; the m3u lists the expected file names in album order (with the
+  // "Disc NN/" prefix on multi-disc sets) and is written up front — the
+  // actual downloads fill in asynchronously.
+  private async writeAlbumExtras(
+    playlist: PlaylistEntity,
+    tracks: any[],
+  ): Promise<void> {
+    const folder = this.utilsService.getPlaylistFolderPath(playlist);
+    try {
+      if (playlist.coverUrl) {
+        const res = await fetch(playlist.coverUrl);
+        if (res.ok) {
+          fs.writeFileSync(
+            resolve(folder, 'cover.jpg'),
+            Buffer.from(await res.arrayBuffer()),
+          );
+        }
+      }
+      const multiDisc = (playlist.discs ?? 1) > 1;
+      const lines = tracks.map((t) => {
+        const file = this.trackService.getTrackFileName({
+          artist: t.artist,
+          name: t.name,
+          trackNumber: t.trackNumber,
+        } as TrackEntity);
+        const prefix =
+          multiDisc && t.discNumber
+            ? `Disc ${this.utilsService.pad2(t.discNumber)}/`
+            : '';
+        return prefix + file;
+      });
+      const m3uName = `${this.utilsService.stripFileIllegalChars(playlist.name)}.m3u`;
+      fs.writeFileSync(resolve(folder, m3uName), lines.join('\n') + '\n');
+    } catch (err) {
+      this.logger.warn(`Album extras (cover/m3u) failed: ${err}`);
     }
   }
 
@@ -252,7 +301,17 @@ export class PlaylistService {
           })
         ).length;
         if (!isExist) {
-          await this.trackService.create(track2Save, playlist);
+          // Album fields go only into create, not into the existence check
+          // above — old rows without numbers would otherwise duplicate.
+          await this.trackService.create(
+            {
+              ...track2Save,
+              trackNumber: track.trackNumber,
+              discNumber: track.discNumber,
+              durationMs: track.durationMs,
+            },
+            playlist,
+          );
         }
       }
     }

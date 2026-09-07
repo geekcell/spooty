@@ -35,6 +35,10 @@ export class PlaylistEntity {
   @Column({ nullable: true })
   year?: string;
 
+  // Highest disc number of the album — >1 nests tracks into "Disc NN".
+  @Column({ nullable: true })
+  discs?: number;
+
   @OneToMany(() => TrackEntity, (track) => track.playlist)
   tracks?: TrackEntity[];
 }

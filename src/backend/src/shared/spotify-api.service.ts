@@ -67,6 +67,7 @@ export class SpotifyApiService {
     artist: string;
     year: string;
     image: string;
+    discs: number;
     tracks: any[];
   }> {
     this.logger.debug(`Getting album metadata for ${spotifyUrl}`);
@@ -83,12 +84,22 @@ export class SpotifyApiService {
     const data = await response.json();
     const coverUrl = data.images?.[0]?.url || '';
 
-    const mapTrack = (t: { id: string; name: string; artists: any[] }) => ({
+    const mapTrack = (t: {
+      id: string;
+      name: string;
+      artists: any[];
+      track_number: number;
+      disc_number: number;
+      duration_ms: number;
+    }) => ({
       id: t.id,
       name: t.name,
       artist: t.artists.map((a) => a.name).join(', '),
       previewUrl: null,
       coverUrl,
+      trackNumber: t.track_number,
+      discNumber: t.disc_number,
+      durationMs: t.duration_ms,
     });
 
     const tracks = (data.tracks?.items ?? []).map(mapTrack);
@@ -111,6 +122,7 @@ export class SpotifyApiService {
       artist: (data.artists ?? []).map((a) => a.name).join(', '),
       year: String(data.release_date || '').slice(0, 4),
       image: coverUrl,
+      discs: tracks.reduce((m, t) => Math.max(m, t.discNumber || 1), 1),
       tracks,
     };
   }
