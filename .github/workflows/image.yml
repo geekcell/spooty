@@ -1,0 +1,31 @@
+# Baut das unveraenderte Upstream-Image nach ghcr.io/geekcell/spooty.
+# Kein App-Code-Patch — der Fork existiert nur, weil upstream kein Image
+# veroeffentlicht (User-Ansage 2026-09-07: nichts am Code aendern).
+name: image
+
+on:
+  push:
+    branches: [main]
+  workflow_dispatch:
+
+permissions:
+  contents: read
+  packages: write
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: docker/login-action@v3
+        with:
+          registry: ghcr.io
+          username: ${{ github.actor }}
+          password: ${{ secrets.GITHUB_TOKEN }}
+
+      - uses: docker/build-push-action@v6
+        with:
+          context: .
+          push: true
+          tags: ghcr.io/geekcell/spooty:latest
