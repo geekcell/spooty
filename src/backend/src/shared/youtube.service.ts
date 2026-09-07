@@ -4,6 +4,7 @@ import { EnvironmentEnum } from '../environmentEnum';
 import { TrackService } from '../track/track.service';
 import { ConfigService } from '@nestjs/config';
 import { exec, spawn } from 'child_process';
+import { existsSync } from 'fs';
 const NodeID3 = require('node-id3');
 
 @Injectable()
@@ -64,12 +65,19 @@ export class YoutubeService {
       || require('path').resolve(require.resolve('ytdlp-nodejs'), '..', '..', 'bin', 'yt-dlp');
     const format = this.configService.get<string>(EnvironmentEnum.FORMAT) || 'mp3';
     const quality = this.configService.get<string>('QUALITY');
+    // cookies.txt is an optional mount — yt-dlp aborts on a missing file,
+    // so only pass it when it actually exists.
+    const cookiesPath = '/spooty/cookies.txt';
     const args = [
       '--js-runtime', 'node',
       '-o', output,
-      '--cookies', '/spooty/cookies.txt',
+      ...(existsSync(cookiesPath) ? ['--cookies', cookiesPath] : []),
       '--extract-audio',
       '--audio-format', format,
+      // Proper container tags (Vorbis comments for opus/flac, ID3 for mp3)
+      // plus cover art — NodeID3 below only handles mp3.
+      '--embed-metadata',
+      '--embed-thumbnail',
       '--progress',
       '--newline',
       '--progress-template', '%(progress._percent_str)s',
@@ -116,6 +124,9 @@ export class YoutubeService {
     title: string,
     artist: string,
   ): Promise<void> {
+    // NodeID3 writes ID3v2 — that only belongs on mp3; flac/opus get their
+    // tags natively via yt-dlp --embed-metadata / --embed-thumbnail.
+    if (!folderName.endsWith('.mp3')) return;
     if (coverUrl) {
       const res = await fetch(coverUrl);
       const arrayBuf = await res.arrayBuffer();

@@ -33,10 +33,20 @@ export class SpotifyService {
     }
   }
 
-  async getPlaylistDetail(
-    spotifyUrl: string,
-  ): Promise<{ name: string; tracks: any[]; image: string }> {
+  async getPlaylistDetail(spotifyUrl: string): Promise<{
+    name: string;
+    tracks: any[];
+    image: string;
+    artist?: string;
+    year?: string;
+  }> {
     this.logger.debug(`Get playlist ${spotifyUrl} on Spotify`);
+
+    // Album URLs get their own path: the album endpoint also delivers
+    // artist + release year for the "<artist>/<year> - <album>" layout.
+    if (this.spotifyApiService.isAlbumUrl(spotifyUrl)) {
+      return this.spotifyApiService.getAlbumMetadata(spotifyUrl);
+    }
 
     try {
       const metadata =
@@ -63,6 +73,9 @@ export class SpotifyService {
 
   async getPlaylistTracks(spotifyUrl: string): Promise<any[]> {
     this.logger.debug(`Get playlist ${spotifyUrl} on Spotify`);
+    if (this.spotifyApiService.isAlbumUrl(spotifyUrl)) {
+      return (await this.spotifyApiService.getAlbumMetadata(spotifyUrl)).tracks;
+    }
     try {
       return await this.spotifyApiService.getAllPlaylistTracks(spotifyUrl);
     } catch (error) {

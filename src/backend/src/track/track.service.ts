@@ -202,9 +202,8 @@ export class TrackService {
       );
     }
     
-    const safePlaylistName = playlist?.name || 'unknown_playlist';
     return resolve(
-      this.utilsService.getPlaylistFolderPath(safePlaylistName),
+      this.utilsService.getPlaylistFolderPath(playlist ?? {}),
       this.getTrackFileName(track),
     );
   }

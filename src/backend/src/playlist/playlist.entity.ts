@@ -27,6 +27,14 @@ export class PlaylistEntity {
   @Column({ nullable: true })
   coverUrl?: string;
 
+  // Album metadata (only set for album URLs): switches the download layout
+  // to "<artist>/<year> - <name>" instead of the flat playlist folder.
+  @Column({ nullable: true })
+  artist?: string;
+
+  @Column({ nullable: true })
+  year?: string;
+
   @OneToMany(() => TrackEntity, (track) => track.playlist)
   tracks?: TrackEntity[];
 }

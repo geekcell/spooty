@@ -51,6 +51,12 @@ import { BullModule } from '@nestjs/bullmq';
         connection: {
           host: configService.get<string>(EnvironmentEnum.REDIS_HOST),
           port: configService.get<number>(EnvironmentEnum.REDIS_PORT),
+          // Optional auth/db for an external Redis/Valkey (e.g. with ACL
+          // users); all three stay undefined when unset — same behaviour
+          // as before for the bundled redis-server.
+          username: configService.get<string>(EnvironmentEnum.REDIS_USER),
+          password: configService.get<string>(EnvironmentEnum.REDIS_PASSWORD),
+          db: configService.get<number>(EnvironmentEnum.REDIS_DB),
         },
       }),
       inject: [ConfigService],

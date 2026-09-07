@@ -15,11 +15,23 @@ export class UtilsService {
     );
   }
 
-  getPlaylistFolderPath(name: string): string {
-    return resolve(
-      this.getRootDownloadsPath(),
-      this.stripFileIllegalChars(name),
+  // Albums are stored as "<artist>/<year> - <name>", playlists stay flat.
+  getPlaylistFolderPath(playlist: {
+    name?: string;
+    artist?: string;
+    year?: string;
+  }): string {
+    const name = this.stripFileIllegalChars(
+      playlist?.name || 'unknown_playlist',
     );
+    if (playlist?.artist && playlist?.year) {
+      return resolve(
+        this.getRootDownloadsPath(),
+        this.stripFileIllegalChars(playlist.artist),
+        `${playlist.year} - ${name}`,
+      );
+    }
+    return resolve(this.getRootDownloadsPath(), name);
   }
 
   stripFileIllegalChars(text: string): string {

@@ -36,6 +36,85 @@ export class SpotifyApiService {
     }
   }
 
+  isAlbumUrl(url: string): boolean {
+    try {
+      const urlObj = new URL(url);
+      return urlObj.pathname.includes('/album/');
+    } catch {
+      return false;
+    }
+  }
+
+  private getAlbumId(url: string): string {
+    try {
+      const urlObj = new URL(url);
+      const pathParts = urlObj.pathname.split('/');
+      const albumIndex = pathParts.findIndex((part) => part === 'album');
+      if (albumIndex >= 0 && pathParts.length > albumIndex + 1) {
+        return pathParts[albumIndex + 1].split('?')[0];
+      }
+      throw new Error('Invalid Spotify album URL');
+    } catch (error) {
+      this.logger.error(`Failed to extract album ID: ${error.message}`);
+      throw error;
+    }
+  }
+
+  // Albums carry artist + release year, which drive the
+  // "<artist>/<year> - <album>" download layout.
+  async getAlbumMetadata(spotifyUrl: string): Promise<{
+    name: string;
+    artist: string;
+    year: string;
+    image: string;
+    tracks: any[];
+  }> {
+    this.logger.debug(`Getting album metadata for ${spotifyUrl}`);
+    const albumId = this.getAlbumId(spotifyUrl);
+    const accessToken = await this.getEmbedToken('album', albumId);
+
+    const response = await fetch(
+      `https://api.spotify.com/v1/albums/${albumId}`,
+      { headers: { Authorization: `Bearer ${accessToken}` } },
+    );
+    if (!response.ok) {
+      throw new Error(`Failed to fetch album: ${response.status}`);
+    }
+    const data = await response.json();
+    const coverUrl = data.images?.[0]?.url || '';
+
+    const mapTrack = (t: { id: string; name: string; artists: any[] }) => ({
+      id: t.id,
+      name: t.name,
+      artist: t.artists.map((a) => a.name).join(', '),
+      previewUrl: null,
+      coverUrl,
+    });
+
+    const tracks = (data.tracks?.items ?? []).map(mapTrack);
+    // Deluxe box sets exceed the 50-track first page — follow pagination.
+    let next = data.tracks?.next;
+    while (next) {
+      const pageRes = await fetch(next, {
+        headers: { Authorization: `Bearer ${accessToken}` },
+      });
+      if (!pageRes.ok) {
+        throw new Error(`Failed to fetch album tracks: ${pageRes.status}`);
+      }
+      const page = await pageRes.json();
+      tracks.push(...(page.items ?? []).map(mapTrack));
+      next = page.next;
+    }
+
+    return {
+      name: data.name,
+      artist: (data.artists ?? []).map((a) => a.name).join(', '),
+      year: String(data.release_date || '').slice(0, 4),
+      image: coverUrl,
+      tracks,
+    };
+  }
+
   private getTrackId(url: string): string {
     try {
       const urlObj = new URL(url);

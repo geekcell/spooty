@@ -101,7 +101,13 @@ export class PlaylistService {
   }
 
   private async createPlaylist(playlist: PlaylistEntity): Promise<void> {
-    let detail: { tracks: any; name: any; image: any };
+    let detail: {
+      tracks: any;
+      name: any;
+      image: any;
+      artist?: string;
+      year?: string;
+    };
     let playlist2Save: PlaylistEntity;
     try {
       detail = await this.spotifyService.getPlaylistDetail(playlist.spotifyUrl);
@@ -113,8 +119,10 @@ export class PlaylistService {
         ...playlist,
         name: detail.name,
         coverUrl: detail.image,
+        artist: detail.artist,
+        year: detail.year,
       };
-      this.createPlaylistFolderStructure(playlist2Save.name);
+      this.createPlaylistFolderStructure(playlist2Save);
     } catch (err) {
       this.logger.error(`Error getting playlist details: ${err}`);
       playlist2Save = { ...playlist, error: String(err) };
@@ -205,9 +213,14 @@ export class PlaylistService {
     }
   }
 
-  private createPlaylistFolderStructure(playlistName: string): void {
-    const playlistPath = this.utilsService.getPlaylistFolderPath(playlistName);
-    !fs.existsSync(playlistPath) && fs.mkdirSync(playlistPath);
+  private createPlaylistFolderStructure(playlist: {
+    name?: string;
+    artist?: string;
+    year?: string;
+  }): void {
+    const playlistPath = this.utilsService.getPlaylistFolderPath(playlist);
+    // recursive: albums nest as "<artist>/<year> - <name>"
+    fs.mkdirSync(playlistPath, { recursive: true });
   }
 
   @Interval(3_600_000)
@@ -222,7 +235,7 @@ export class PlaylistService {
         tracks = await this.spotifyService.getPlaylistTracks(
           playlist.spotifyUrl,
         );
-        this.createPlaylistFolderStructure(playlist.name);
+        this.createPlaylistFolderStructure(playlist);
       } catch (err) {
         await this.update(playlist.id, { ...playlist, error: String(err) });
       }
